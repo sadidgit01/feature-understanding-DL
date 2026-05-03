@@ -40,29 +40,18 @@ The extraction process passed all 1,000 images through each model using a batch 
 
 The pipeline used in the project can be summarized as follows:
 
-```text
-Raw Images
-    |
-    v
-Dataset Loader
-    |
-    v
-Image Preprocessing
-    |
-    v
-CNN Feature Extractors
-    |
-    v
-Embedding Files
-    |
-    +--> Cosine Similarity Search
-    |
-    +--> Intra-class and Inter-class Distance Evaluation
-    |
-    +--> t-SNE Visualization
-    |
-    v
-Final Summary and Report
+```mermaid
+flowchart TD
+    A[Raw Images] --> B[Dataset Loader]
+    B --> C[Image Preprocessing]
+    C --> D[CNN Feature Extractors]
+    D --> E[Embedding Files]
+    E --> F[Cosine Similarity Search]
+    E --> G[Intra-class and Inter-class Distance Evaluation]
+    E --> H[t-SNE Visualization]
+    F --> I[Final Summary and Report]
+    G --> I
+    H --> I
 ```
 
 After embedding extraction, cosine similarity was used to find nearest neighbors. For each class, the first image in the label array was selected as a query image. The top 10 nearest neighbors were found by comparing the query embedding against all embeddings from the same model, excluding the query itself. The similarity results were saved as pickle files in the `results/` directory.
