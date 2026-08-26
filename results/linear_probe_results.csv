@@ -1,0 +1,4 @@
+Model,Linear Probe Accuracy
+resnet101,0.895
+googlenet,0.905
+zfnet,0.595
