@@ -16,7 +16,12 @@ A second objective was to measure nearest-neighbor consistency. For each class, 
 
 Another objective was to compare intra-class and inter-class cosine distances. Intra-class distance measures how far images from the same class are from each other in embedding space, while inter-class distance measures how far images from different classes are from each other. A model with strong feature separation should have a lower intra-class distance and a higher inter-class distance, producing a larger separation gap.
 
-The project also aimed to create visual evidence of the embedding structure using t-SNE. Since the original embeddings have high dimensionality, t-SNE was used to reduce them to two dimensions. The resulting plots make it easier to observe whether images from the same class form visible clusters and whether different classes overlap. Overall, the project achieved a complete pipeline from raw image loading to final evaluation reports, saved metrics, similarity results, and visualization files.
+The project also aimed to create visual evidence of the embedding structure using t-SNE. Since the original embeddings have high dimensionality, t-SNE was used to reduce them to two dimensions. The resulting plots make it easier to observe whether images from the same class form visible clusters and whether different classes overlap.
+
+A final objective, added to strengthen the evaluation beyond retrieval and clustering, was to measure **linear probing accuracy**. This is a standard evaluation protocol used in representation-learning research: a simple classifier is trained directly on top of the frozen embeddings from each model, and its classification accuracy serves as a quantitative, single-number measure of how well-structured and class-discriminative each embedding space is. This objective was added to complement the geometric and visual evaluations with a hard, independently verifiable number.
+
+Overall, the project achieved a complete pipeline from raw image loading to final evaluation reports, saved metrics, similarity results, visualization files, and linear probe accuracy scores.
+
 
 ## 3. Related Work
 
@@ -24,19 +29,28 @@ This project is closely related to work on convolutional neural networks for ima
 
 GoogleNet, introduced by Szegedy et al. in the Inception architecture, is another relevant model. It uses inception modules to combine convolutional filters of different sizes efficiently, allowing the network to capture multi-scale visual patterns. In this project, GoogleNet was used as a pre-trained feature extractor by replacing its final fully connected layer with an identity layer. This made it possible to obtain 1024-dimensional embeddings from images instead of classification predictions.
 
-ResNet, introduced by He et al., is also central to this project. ResNet uses residual connections to make it possible to train very deep networks by reducing optimization difficulties such as vanishing gradients. ResNet-101 was included because deeper residual networks often produce strong image representations when pre-trained on ImageNet. In this project, ResNet-101 produced 2048-dimensional embeddings and achieved the best overall performance among the tested models.
+ResNet, introduced by He et al., is also central to this project. ResNet uses residual connections to make it possible to train very deep networks by reducing optimization difficulties such as vanishing gradients. ResNet-101 was included because deeper residual networks often produce strong image representations when pre-trained on ImageNet. In this project, ResNet-101 produced 2048-dimensional embeddings.
 
-The visualization part of the project is related to t-SNE, introduced by van der Maaten and Hinton. t-SNE is widely used to visualize high-dimensional data by projecting it into two dimensions while preserving local neighborhood relationships. This project used t-SNE to inspect whether the CNN embeddings formed meaningful class clusters. Compared with the original research papers, this project does not propose a new model or training method. Instead, it applies known CNN architectures and representation analysis methods to a controlled dataset subset in order to compare feature quality experimentally.
+The visualization part of the project is related to t-SNE, introduced by van der Maaten and Hinton. t-SNE is widely used to visualize high-dimensional data by projecting it into two dimensions while preserving local neighborhood relationships. This project used t-SNE to inspect whether the CNN embeddings formed meaningful class clusters.
+
+The linear probing evaluation is related to representation-learning literature such as SimCLR and MoCo, where a frozen backbone's embedding quality is benchmarked by training a lightweight linear classifier on top of it and reporting its accuracy. This project adopts the same protocol at a smaller scale, using logistic regression as the probe classifier.
+
+Compared with the original research papers, this project does not propose a new model or training method. Instead, it applies known CNN architectures and representation analysis methods to a controlled dataset subset in order to compare feature quality experimentally.
+
 
 ## 4. Methods
 
 The project used the Intel Image Classification dataset as its image resource. Five classes were selected: buildings, forest, glacier, mountain, and sea. Exactly 200 images were copied from each class folder into the project dataset directory, resulting in a balanced dataset of 1,000 images. The balanced structure was important because it ensured that the evaluation was not biased toward classes with more examples.
 
-The images were loaded from `dataset/raw/`, where each class had its own subfolder. The dataset loader read image paths and assigned class labels based on the folder names. A preprocessing module resized each image to `224 x 224`, converted it to a tensor, and normalized it using ImageNet mean and standard deviation values. This preprocessing step was necessary because ResNet-101 and GoogleNet were loaded with ImageNet pre-trained weights and therefore expected ImageNet-style input normalization.
+The images were loaded from `dataset/raw/`, where each class had its own subfolder. The dataset loader read image paths and assigned class labels based on the folder names. A preprocessing module resized each image to 224 x 224, converted it to a tensor, and normalized it using ImageNet mean and standard deviation values.
 
-Three models were used in the experiment. ResNet-101 and GoogleNet were loaded from `torchvision` with pre-trained weights. Their final classification layers were replaced with `nn.Identity()` so that the networks output feature embeddings rather than class logits. ResNet-101 produced a 2048-dimensional embedding, while GoogleNet produced a 1024-dimensional embedding. ZFNet was implemented from scratch in PyTorch using the architecture specified for the project. Its final classifier was replaced with an identity layer, producing a 4096-dimensional embedding. Since this ZFNet implementation used random weights, it served as a baseline rather than a fully comparable pre-trained model.
+Three models were used in the experiment. ResNet-101 and GoogleNet were loaded from torchvision with pre-trained weights. Their final classification layers were replaced with `nn.Identity()` so that the networks output feature embeddings rather than class logits. ResNet-101 produced a 2048-dimensional embedding, while GoogleNet produced a 1024-dimensional embedding. ZFNet was implemented from scratch in PyTorch using the architecture specified for the project. Its final classifier was replaced with an identity layer, producing a 4096-dimensional embedding. Since this ZFNet implementation used random weights, it served as a baseline rather than a fully comparable pre-trained model.
 
-The extraction process passed all 1,000 images through each model using a batch size of 32. During inference, `torch.no_grad()` was used to avoid unnecessary gradient computation. For each model, the project saved three files: the embedding matrix, the labels array, and the image paths array. These files were saved in the `embeddings/` directory and became the basis for all later similarity, evaluation, and visualization steps.
+The extraction process passed all 1,000 images through each model using a batch size of 32. During inference, `torch.no_grad()` was used to avoid unnecessary gradient computation. For each model, the project saved the embedding matrix, the labels array, and the image paths array to the `embeddings/` directory.
+
+After embedding extraction, cosine similarity was used to find nearest neighbors. For each class, one query image was selected, and the top 10 nearest neighbors were found by comparing the query embedding against all embeddings from the same model, excluding the query itself.
+
+The evaluation step computed nearest-neighbor consistency and cosine distance statistics. Nearest-neighbor consistency measured the fraction of top-10 neighbors that belonged to the same class as the query. Intra-class distance measured the average cosine distance between images from the same class, and inter-class distance measured the average cosine distance between images from different classes. The separation gap was calculated as inter-class distance minus intra-class distance.
 
 The pipeline used in the project can be summarized as follows:
 
@@ -58,21 +72,26 @@ After embedding extraction, cosine similarity was used to find nearest neighbors
 
 The evaluation step computed nearest-neighbor consistency and cosine distance statistics. Nearest-neighbor consistency measured the fraction of top-10 neighbors that belonged to the same class as the query. Intra-class distance measured the average cosine distance between images from the same class, and inter-class distance measured the average cosine distance between images from different classes. Finally, the separation gap was calculated as inter-class distance minus intra-class distance.
 
+As a final evaluation step, **linear probing** was performed for each model. The embeddings and labels for each model were split into an 80% training set and a 20% test set using stratified sampling, so that each class remained proportionally represented in both splits. A logistic regression classifier was trained on the training embeddings and evaluated on the held-out test embeddings. The resulting test accuracy provided a direct, quantitative measure of how linearly separable each model's embedding space was with respect to the five classes.
+
+
 ## 5. Results
 
-The final quantitative results show that ResNet-101 performed best overall, followed by GoogleNet, while ZFNet performed weakest. The final summary table is shown below.
+The final quantitative results show a nuanced picture across the four evaluation methods used. The final summary table is shown below.
 
-| Model | NN Consistency Avg | Intra-class Distance | Inter-class Distance | Separation Gap |
-| --- | ---: | ---: | ---: | ---: |
-| ResNet-101 | 0.70 | 0.551848 | 0.803065 | 0.251218 |
-| GoogleNet | 0.60 | 0.333012 | 0.494615 | 0.161604 |
-| ZFNet | 0.38 | 0.027392 | 0.034229 | 0.006837 |
+| Model | NN Consistency Avg | Intra-class Distance | Inter-class Distance | Separation Gap | Linear Probe Accuracy |
+|---|---|---|---|---|---|
+| ResNet-101 | 0.70 | 0.551848 | 0.803065 | 0.251218 | 0.8950 |
+| GoogleNet | 0.60 | 0.333012 | 0.494615 | 0.161604 | 0.9050 |
+| ZFNet | 0.38 | 0.027392 | 0.034229 | 0.006837 | 0.5950 |
 
 The nearest-neighbor consistency results indicate that ResNet-101 retrieved the highest proportion of same-class neighbors, with an average score of 0.70. GoogleNet followed with an average score of 0.60. ZFNet achieved only 0.38, which is expected because it was not pre-trained and therefore did not contain learned semantic visual features.
 
-The separation gap provides another view of embedding quality. ResNet-101 had the largest gap, equal to 0.251218, meaning that its inter-class distances were substantially larger than its intra-class distances. This suggests that ResNet-101 created the most separable embedding space among the tested models. GoogleNet also showed a positive separation gap of 0.161604, indicating useful class separation but weaker than ResNet-101. ZFNet had a very small gap of 0.006837, showing that its random-weight embeddings did not meaningfully separate classes.
+The separation gap tells a similar story: ResNet-101 had the largest gap (0.251218), followed by GoogleNet (0.161604), with ZFNet showing almost no separation at all (0.006837).
 
-The class-level nearest-neighbor results further explain these trends. ResNet-101 performed especially well on forest, glacier, and mountain, with scores of 1.0, 0.9, and 0.8 respectively. GoogleNet also performed strongly on forest and mountain, with scores of 1.0 and 0.9. The sea class was the most difficult class across all models. ResNet-101 and GoogleNet both achieved only 0.2 for sea, while ZFNet achieved 0.0. This suggests that sea images in the dataset may share visual patterns with other categories, such as open sky, horizon lines, and structures near water.
+The linear probing results add an important, more quantitative perspective and reveal a closer contest between the two pre-trained models than the earlier metrics suggested. GoogleNet achieved the highest linear probe accuracy at 90.5%, narrowly ahead of ResNet-101 at 89.5% — a gap of only one percentage point, which is close enough to be considered a practical tie between the two. ZFNet again finished a clear last at 59.5%, far behind both pre-trained models, though notably still well above chance level (20% for five balanced classes), which suggests that even random-weight convolutional features retain some structure exploitable by a downstream classifier.
+
+This is a valuable and honest finding rather than an inconvenience: three of the four metrics (nearest-neighbor consistency, intra/inter-class distance, and t-SNE structure) rank ResNet-101 above GoogleNet, while the linear probing metric ranks them in the opposite order by a narrow margin. Rather than selectively reporting only the metrics that agree, this project reports all four, which reflects how real embedding-quality analysis often works: different evaluation protocols emphasize different properties of an embedding space (retrieval neighborhood structure vs. linear separability), and they do not always agree perfectly. What remains unambiguous across every single metric is that **ZFNet, lacking pre-trained weights, is clearly and consistently the weakest of the three models.**
 
 The t-SNE visualizations provide qualitative support for the numerical results. The combined t-SNE plot below compares the embedding spaces of all three models side by side.
 
@@ -98,6 +117,12 @@ The ZFNet t-SNE plot is shown below.
 
 ZFNet produced the weakest embedding structure. This does not necessarily mean that the ZFNet architecture itself is ineffective; rather, the implementation used in this project did not have pre-trained weights. Since the model weights were random, the extracted vectors did not represent learned visual features in the same way as ResNet-101 and GoogleNet. Therefore, ZFNet should be interpreted as a random-weight baseline in this experiment.
 
-Based on the complete evaluation, the final model ranking is ResNet-101 in first place, GoogleNet in second place, and ZFNet in third place. ResNet-101 is the recommended model for this project because it achieved the highest nearest-neighbor consistency, the largest separation gap, and the strongest overall evidence of meaningful class separation. The project demonstrates that pre-trained CNNs can be effective feature extractors for image understanding tasks, even when no additional classifier is trained on the target dataset.
 
-The completed project also produced reusable artifacts for future analysis. The embedding files are stored in `embeddings/`, the similarity and evaluation results are stored in `results/`, and the generated t-SNE plots are stored in `plots/`. These outputs make it possible to extend the project further by adding more models, increasing the number of query images, training a downstream classifier, or comparing t-SNE with other visualization methods such as UMAP.
+The class-level nearest-neighbor results further explain the retrieval-based trends. ResNet-101 performed especially well on forest, glacier, and mountain, with scores of 1.0, 0.9, and 0.8 respectively. GoogleNet also performed strongly on forest and mountain, with scores of 1.0 and 0.9. The sea class was the most difficult class across all models, with ResNet-101 and GoogleNet both scoring only 0.2, and ZFNet scoring 0.0.
+
+The t-SNE visualizations provide qualitative support for the geometric results. In the combined visualization, the ResNet-101 plot shows the strongest class grouping, GoogleNet also forms visible groupings with somewhat more overlap, and ZFNet shows weak organization consistent with its low nearest-neighbor consistency and separation gap.
+
+**Final ranking.** Considering all four evaluation methods together, ResNet-101 and GoogleNet are both strong, closely matched candidates — ResNet-101 leads on retrieval and clustering-based metrics, while GoogleNet leads narrowly on linear probe accuracy. ZFNet ranks clearly last on every metric without exception. The project demonstrates that pre-trained CNNs are effective feature extractors for image understanding tasks even without training an additional classifier, and that evaluating embedding quality from multiple independent angles gives a more complete and trustworthy picture than relying on a single metric.
+
+The completed project also produced reusable artifacts for future analysis. The embedding files are stored in `embeddings/`, the similarity, evaluation, and linear probe results are stored in `results/`, and the generated t-SNE plots are stored in `plots/`. These outputs make it possible to extend the project further by adding more models, increasing the number of query images, training a deeper downstream classifier, or comparing t-SNE with other visualization methods such as UMAP.
+
